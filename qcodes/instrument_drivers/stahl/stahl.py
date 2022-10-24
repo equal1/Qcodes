@@ -110,12 +110,12 @@ class StahlChannel(InstrumentChannel):
         )
 
         send_string = f"{self.parent.identifier} CH{self._channel_string} " \
-            f"{voltage_normalized:.5f}"
+            f"{voltage_normalized:.6f}"
         response = self.ask(send_string)
 
         if response != self.acknowledge_reply:
             self.log.warning(
-                f"Command {send_string} did not produce an acknowledge reply")
+                f"Command {send_string} did not produce an acknowledge reply\n    response was: {response}")
 
     def _get_lock_status(self) -> bool:
         """
