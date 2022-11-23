@@ -125,6 +125,36 @@ def checked_getattr(
         raise TypeError()
     return attr
 
+# allows simple integer indices in the attribute name
+def getattr_indexed(instance: Any, attribute: str) -> Any:
+    if not attribute.endswith("]"):
+        return getattr(instance, attribute)
+
+    end:int = len(attribute) - 1
+
+    start:int = attribute.find('[', 0, end)
+    attr: Any = getattr(instance, attribute[0:start])
+    start += 1
+
+    while (pos := attribute.find('][', start, end)) != -1:
+        index = int(attribute[start:pos])
+        attr = attr[index]
+        start = pos + 2
+
+    index = int(attribute[start:end])
+    attr = attr[index]
+    return attr
+
+def checked_getattr_indexed(
+    instance: Any, attribute: str, expected_type: Union[type, Tuple[type, ...]]
+) -> Any:
+    """
+    Like ``getattr`` but raises type error if not of expected type.
+    """
+    attr: Any = getattr_indexed(instance, attribute)
+    if not isinstance(attr, expected_type):
+        raise TypeError()
+    return attr
 
 @contextmanager
 def attribute_set_to(
