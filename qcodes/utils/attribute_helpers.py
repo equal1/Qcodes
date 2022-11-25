@@ -125,8 +125,17 @@ def checked_getattr(
         raise TypeError()
     return attr
 
-# allows simple integer indices in the attribute name
 def getattr_indexed(instance: Any, attribute: str) -> Any:
+    """
+    Similar to ``getattr`` but allows indexing the returned attribute.
+    Returning a default value is _not_ supported.
+
+    The indices are decimal digits surrounded by square brackets.
+    Chained indexing is supported, but the string should not contain 
+    any whitespace between consecutive indices.
+
+    Example: `getattr(some_object, "list_of_lists_field[1][2]")`
+    """
     if not attribute.endswith("]"):
         return getattr(instance, attribute)
 
@@ -149,7 +158,7 @@ def checked_getattr_indexed(
     instance: Any, attribute: str, expected_type: Union[type, Tuple[type, ...]]
 ) -> Any:
     """
-    Like ``getattr`` but raises type error if not of expected type.
+    Like ``getattr_indexed`` but raises type error if not of expected type.
     """
     attr: Any = getattr_indexed(instance, attribute)
     if not isinstance(attr, expected_type):
