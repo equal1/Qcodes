@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Iterable, Optional
 
 import numpy as np
 from pyvisa.resources.serial import SerialInstrument
+from pyvisa.resources.tcpip import TCPIPSocket
 
 from qcodes.instrument import ChannelList, InstrumentChannel, VisaInstrument
 from qcodes.validators import Numbers
@@ -61,11 +62,13 @@ class StahlChannel(InstrumentChannel):
         self._channel_string = f"{channel_number:02d}"
         self._channel_number = channel_number
 
+        FLOATING_POINT_RE = r"[+\-]?(?:[.,]\d+|\d+(?:[.,]\d*)?)(?:[eE][-+]?\d+)?"
+
         self.add_parameter(
             "voltage",
             get_cmd=f"{self.parent.identifier} U{self._channel_string}",
             get_parser=chain(
-                re.compile(r"^([+\-]\d+,\d+) V$").findall,
+                re.compile(f"^({FLOATING_POINT_RE})[ ]?V$").findall,
                 partial(re.sub, ",", "."),
                 float
             ),
@@ -81,7 +84,7 @@ class StahlChannel(InstrumentChannel):
             "current",
             get_cmd=f"{self.parent.identifier} I{self._channel_string}",
             get_parser=chain(
-                re.compile(r"^([+\-]\d+,\d+) mA$").findall,
+                re.compile(f"^({FLOATING_POINT_RE})[ ]?mA$").findall,
                 partial(re.sub, ",", "."),
                 lambda ma: float(ma) / 1000  # Convert mA to A
             ),
@@ -107,12 +110,12 @@ class StahlChannel(InstrumentChannel):
         )
 
         send_string = f"{self.parent.identifier} CH{self._channel_string} " \
-            f"{voltage_normalized:.5f}"
+            f"{voltage_normalized:.6f}"
         response = self.ask(send_string)
 
         if response != self.acknowledge_reply:
             self.log.warning(
-                f"Command {send_string} did not produce an acknowledge reply")
+                f"Command {send_string} did not produce an acknowledge reply\n    response was: {response}")
 
     def _get_lock_status(self) -> bool:
         """
@@ -146,9 +149,11 @@ class Stahl(VisaInstrument):
 
     def __init__(self, name: str, address: str, **kwargs: Any):
         super().__init__(name, address, terminator="\r", **kwargs)
-        assert isinstance(self.visa_handle, SerialInstrument)
-
-        self.visa_handle.baud_rate = 115200
+        if isinstance(self.visa_handle, TCPIPSocket):
+            pass # allow connection to remote serial device
+        else:
+            assert isinstance(self.visa_handle, SerialInstrument)
+            self.visa_handle.baud_rate = 115200
 
         instrument_info = self.parse_idn_string(
             self.ask("IDN")
