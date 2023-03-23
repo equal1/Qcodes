@@ -1,8 +1,8 @@
 import logging
 
 import pytest
+from pytest import LogCaptureFixture
 
-import qcodes.instrument.sims as sims
 from qcodes.instrument_drivers.stahl import Stahl
 
 LOG_NAME = "qcodes.instrument.instrument_base"
@@ -10,12 +10,8 @@ LOG_NAME = "qcodes.instrument.instrument_base"
 
 @pytest.fixture(scope="function")
 def stahl_instrument():
-    visa_lib = sims.__file__.replace(
-        '__init__.py',
-        'stahl.yaml@sim'
-    )
 
-    inst = Stahl('Stahl', 'ASRL3', visalib=visa_lib)
+    inst = Stahl("Stahl", "ASRL3", pyvisa_sim_file="stahl.yaml")
 
     try:
         yield inst
@@ -23,7 +19,7 @@ def stahl_instrument():
         inst.close()
 
 
-def test_parse_idn_string():
+def test_parse_idn_string() -> None:
     """
     Test that we can parse IDN strings correctly
     """
@@ -42,7 +38,7 @@ def test_parse_idn_string():
         Stahl.parse_idn_string("HS123 005 16 bla b")
 
 
-def test_get_idn(stahl_instrument):
+def test_get_idn(stahl_instrument) -> None:
     """
     Instrument attributes are set correctly after getting the IDN
     """
@@ -58,7 +54,7 @@ def test_get_idn(stahl_instrument):
     assert stahl_instrument.output_type == "bipolar"
 
 
-def test_get_set_voltage(stahl_instrument, caplog):
+def test_get_set_voltage(stahl_instrument, caplog: LogCaptureFixture) -> None:
     """
     Test that we can correctly get/set voltages
     """
@@ -73,7 +69,9 @@ def test_get_set_voltage(stahl_instrument, caplog):
     )
 
 
-def test_get_set_voltage_assert_warning(stahl_instrument, caplog):
+def test_get_set_voltage_assert_warning(
+    stahl_instrument, caplog: LogCaptureFixture
+) -> None:
     """
     On channel 2 we have deliberately introduced an error in the
     visa simulation; setting a voltage does not produce an acknowledge
@@ -86,7 +84,7 @@ def test_get_set_voltage_assert_warning(stahl_instrument, caplog):
     )
 
 
-def test_get_current(stahl_instrument):
+def test_get_current(stahl_instrument) -> None:
     """
     Test that we can read currents and that the unit is in Ampere
     """
@@ -94,7 +92,7 @@ def test_get_current(stahl_instrument):
     assert stahl_instrument.channel[0].current.unit == "A"
 
 
-def test_get_temperature(stahl_instrument):
+def test_get_temperature(stahl_instrument) -> None:
     """
     Due to limitations in pyvisa-sim, we cannot test this.
     Line 191 of pyvisa-sim/component.py  should read

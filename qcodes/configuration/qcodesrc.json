@@ -59,6 +59,7 @@
         "use_monitor": false
     },
     "GUID_components": {
+        "GUID_type": "random_sample",
         "location": 0,
         "work_station": 0,
         "sample": 0
@@ -69,10 +70,11 @@
         "use_threads": false,
         "dond_plot": false,
         "dond_show_progress": false,
+        "callback_percent" : 5.0,
         "export_automatic": false,
         "export_type": null,
         "export_prefix": "qcodes_",
-        "export_path": "~",
+        "export_path": "{db_location}",
         "export_name_elements": ["captured_run_id", "guid"]
     },
     "telemetry":

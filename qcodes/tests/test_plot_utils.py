@@ -2,18 +2,18 @@
 Tests for `qcodes.utils.plotting`.
 """
 import matplotlib
-
-# set matplotlib backend before importing pyplot
-matplotlib.use("Agg")
-
-from matplotlib import pyplot as plt
+import pytest
 from pytest import fixture
 
 import qcodes
 from qcodes.dataset.plotting import plot_by_id
-from qcodes.tests.common import default_config
 
 from .dataset_generators import dataset_with_outliers_generator
+
+# set matplotlib backend before importing pyplot
+matplotlib.use("Agg")
+
+from matplotlib import pyplot as plt  # noqa E402
 
 
 @fixture(scope='function')
@@ -35,33 +35,32 @@ def dataset_with_outliers(dataset):
                                            background_noise=False)
 
 
-def test_extend(dataset_with_outliers):
+def test_extend(dataset_with_outliers) -> None:
     # this one should clipp the upper values
     run_id = dataset_with_outliers.run_id
     _, cb = plot_by_id(run_id, auto_color_scale=False)
+    assert cb[0] is not None
     assert cb[0].extend == 'neither'
     _, cb = plot_by_id(run_id, auto_color_scale=True, cutoff_percentile=(0, 0.5))
+    assert cb[0] is not None
     assert cb[0].extend == 'min'
     _, cb = plot_by_id(run_id, auto_color_scale=True, cutoff_percentile=(0.5, 0))
+    assert cb[0] is not None
     assert cb[0].extend == 'max'
     plt.close()
 
 
-def test_defaults(dataset_with_outliers):
+@pytest.mark.usefixtures("default_config")
+def test_defaults(dataset_with_outliers) -> None:
     run_id = dataset_with_outliers.run_id
 
-    # plot_by_id loads from the database location provided in the qcodes
-    # config. But the tests are supposed to run with the standard config.
-    # Therefore we need to backup the db location and add it to the default
-    # config context.
-    db_location = qcodes.config.core.db_location
-    with default_config():
-        qcodes.config.core.db_location = db_location
-        _, cb = plot_by_id(run_id)
-        assert cb[0].extend == 'neither'
+    _, cb = plot_by_id(run_id)
+    assert cb[0] is not None
+    assert cb[0].extend == "neither"
 
-        qcodes.config.plotting.auto_color_scale.enabled = True
+    qcodes.config.plotting.auto_color_scale.enabled = True
 
-        _, cb = plot_by_id(run_id)
-        assert cb[0].extend == 'both'
+    _, cb = plot_by_id(run_id)
+    assert cb[0] is not None
+    assert cb[0].extend == "both"
     plt.close()

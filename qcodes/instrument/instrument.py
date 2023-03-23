@@ -5,7 +5,7 @@ import logging
 import time
 import weakref
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, cast, overload
 
 from qcodes.utils import strip_attrs
 from qcodes.validators import Anything
@@ -88,9 +88,9 @@ class Instrument(InstrumentBase, metaclass=InstrumentMeta):
         idstr = ""  # in case self.ask fails
         try:
             idstr = self.ask("*IDN?")
+            idparts: list[str | None] = []
             # form is supposed to be comma-separated, but we've seen
             # other separators occasionally
-            idparts: list[str | None]
             for separator in ",;:":
                 # split into no more than 4 parts, so we don't lose info
                 idparts = [p.strip() for p in idstr.split(separator, 3)]
@@ -189,7 +189,7 @@ class Instrument(InstrumentBase, metaclass=InstrumentMeta):
                 inst: Instrument = cls.find_instrument(inststr)
                 log.info("Closing %s", inststr)
                 inst.close()
-            except:
+            except Exception:
                 log.exception("Failed to close %s, ignored", inststr)
 
     @classmethod
@@ -225,7 +225,7 @@ class Instrument(InstrumentBase, metaclass=InstrumentMeta):
         cls._instances.add(instance)
 
     @classmethod
-    def instances(cls) -> list[Instrument]:
+    def instances(cls: type[T]) -> list[T]:
         """
         Get all currently defined instances of this instrument class.
 
@@ -258,6 +258,16 @@ class Instrument(InstrumentBase, metaclass=InstrumentMeta):
         for name, ref in list(all_ins.items()):
             if ref is instance:
                 del all_ins[name]
+
+    @overload
+    @classmethod
+    def find_instrument(cls, name: str, instrument_class: None = None) -> Instrument:
+        ...
+
+    @overload
+    @classmethod
+    def find_instrument(cls, name: str, instrument_class: type[T]) -> T:
+        ...
 
     @classmethod
     def find_instrument(cls, name: str, instrument_class: type[T] | None = None) -> T:

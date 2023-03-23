@@ -10,7 +10,7 @@ from qcodes.instrument import IPInstrument
 from qcodes.validators import Enum, Ints
 
 
-class Triton(IPInstrument):
+class OxfordTriton(IPInstrument):
     r"""
     Triton Driver
 
@@ -158,7 +158,7 @@ class Triton(IPInstrument):
 
         try:
             self._get_named_channels()
-        except:
+        except Exception:
             logging.warning('Ignored an error in _get_named_channels\n' +
                             format_exc())
 
@@ -406,3 +406,7 @@ class Triton(IPInstrument):
 
     def _recv(self) -> str:
         return super()._recv().rstrip()
+
+
+Triton = OxfordTriton
+"""Alias for backwards compatibility"""

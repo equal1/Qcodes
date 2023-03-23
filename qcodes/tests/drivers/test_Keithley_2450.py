@@ -2,11 +2,9 @@ import logging
 
 import numpy as np
 import pytest
+from pytest import LogCaptureFixture
 
-import qcodes.instrument.sims as sims
 from qcodes.instrument_drivers.Keithley import Keithley2450
-
-visalib = sims.__file__.replace('__init__.py', 'Keithley_2450.yaml@sim')
 
 
 @pytest.fixture(scope='function')
@@ -14,25 +12,29 @@ def k2450():
     """
     Create a Keithley 2450 instrument
     """
-    driver = Keithley2450('k2450', address='GPIB::2::INSTR', visalib=visalib)
+    driver = Keithley2450(
+        "k2450", address="GPIB::2::INSTR", pyvisa_sim_file="Keithley_2450.yaml"
+    )
     yield driver
     driver.close()
 
 
-def test_wrong_mode(caplog):
+def test_wrong_mode(caplog: LogCaptureFixture) -> None:
     """
     Starting an instrument in the wrong mode should result in a warning. Additionally, no
     parameters should be available, other then the parameters "IDN" and "timeout" which
     are created by the Instrument and VisaInstrument parent classes
     """
     with caplog.at_level(logging.WARNING):
-        instrument = Keithley2450('wrong_mode', address='GPIB::1::INSTR', visalib=visalib)
+        instrument = Keithley2450(
+            "wrong_mode", address="GPIB::1::INSTR", pyvisa_sim_file="Keithley_2450.yaml"
+        )
         assert "The instrument is in an unsupported language mode." in caplog.text
         assert list(instrument.parameters.keys()) == ["IDN", "timeout"]
         instrument.close()
 
 
-def test_change_source_function(k2450):
+def test_change_source_function(k2450) -> None:
     """
     The parameters available on the source sub-module depend on the function.
     """
@@ -50,7 +52,7 @@ def test_change_source_function(k2450):
     assert k2450.submodules["_source_current"] is not k2450.submodules["_source_voltage"]
 
 
-def test_source_change_error(k2450):
+def test_source_change_error(k2450) -> None:
     """
     If the sense function is in resistance mode, test that an error is generated
     when we change the source function
@@ -68,7 +70,7 @@ def test_source_change_error(k2450):
     k2450.source.function("current")
 
 
-def test_sense_current_mode(k2450):
+def test_sense_current_mode(k2450) -> None:
     """
     Test that when we are in a sense function, for example, 'current', that
     the sense property is returning to the correct submodule. We also test
@@ -86,7 +88,7 @@ def test_sense_current_mode(k2450):
             assert not hasattr(k2450.sense, other_sense_function)
 
 
-def test_setpoint_always_follows_source_function(k2450):
+def test_setpoint_always_follows_source_function(k2450) -> None:
     """
     Changing the source and/or sense functions should not confuse the setpoints. These
     should always follow the source module
@@ -104,7 +106,7 @@ def test_setpoint_always_follows_source_function(k2450):
         assert k2450.sense.sweep.setpoints == (k2450.source.sweep_axis,)
 
 
-def test_reset_sweep_on_source_change(k2450):
+def test_reset_sweep_on_source_change(k2450) -> None:
     """
     If we change the source function, we need to run the sweep setup again
     """
@@ -119,7 +121,7 @@ def test_reset_sweep_on_source_change(k2450):
         k2450.source.get_sweep_axis()
 
 
-def test_sweep(k2450):
+def test_sweep(k2450) -> None:
     """
     Verify that we can start sweeps
     """

@@ -1,12 +1,24 @@
 from __future__ import annotations
 
+import sys
+
+if sys.version_info >= (3, 10):
+    # new entrypoints api was added in 3.10
+    from importlib.metadata import entry_points
+else:
+    # 3.9 and earlier
+    from importlib_metadata import entry_points
+
+import logging
 import os
 import warnings
-from collections.abc import Mapping, Sized
+from collections.abc import Mapping
 from enum import Enum
+from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
     Dict,
     List,
     Protocol,
@@ -46,6 +58,10 @@ if TYPE_CHECKING:
 
     from .data_set_cache import DataSetCache
 
+# for unknown reason entrypoints registered in pyproct.toml shows up
+# twice here convert to set to ensure no duplication.
+_EXPORT_CALLBACKS = set(entry_points(group="qcodes.dataset.on_export"))
+
 # even with from __future__ import annotations
 # type aliases must use the old format until we drop 3.8/3.9
 array_like_types = (tuple, list, np.ndarray)
@@ -62,13 +78,14 @@ SPECS: TypeAlias = List[ParamSpec]
 SpecsOrInterDeps: TypeAlias = Union[SPECS, InterDependencies_]
 ParameterData: TypeAlias = Dict[str, Dict[str, np.ndarray]]
 
+LOG = logging.getLogger(__name__)
 
 class CompletedError(RuntimeError):
     pass
 
 
 @runtime_checkable
-class DataSetProtocol(Protocol, Sized):
+class DataSetProtocol(Protocol):
 
     # the "persistent traits" are the attributes/properties of the DataSet
     # that are NOT tied to the representation of the DataSet in any particular
@@ -99,114 +116,114 @@ class DataSetProtocol(Protocol, Sized):
         parent_datasets: Sequence[Mapping[Any, Any]] = (),
         write_in_background: bool = False,
     ) -> None:
-        pass
+        ...
 
     @property
     def pristine(self) -> bool:
-        pass
+        ...
 
     @property
     def running(self) -> bool:
-        pass
+        ...
 
     @property
     def completed(self) -> bool:
-        pass
+        ...
 
     def mark_completed(self) -> None:
-        pass
+        ...
 
     # dataset attributes
 
     @property
     def run_id(self) -> int:
-        pass
+        ...
 
     @property
     def captured_run_id(self) -> int:
-        pass
+        ...
 
     @property
     def counter(self) -> int:
-        pass
+        ...
 
     @property
     def captured_counter(self) -> int:
-        pass
+        ...
 
     @property
     def guid(self) -> str:
-        pass
+        ...
 
     @property
     def number_of_results(self) -> int:
-        pass
+        ...
 
     @property
     def name(self) -> str:
-        pass
+        ...
 
     @property
     def exp_name(self) -> str:
-        pass
+        ...
 
     @property
     def exp_id(self) -> int:
-        pass
+        ...
 
     @property
     def sample_name(self) -> str:
-        pass
+        ...
 
     def run_timestamp(self, fmt: str = "%Y-%m-%d %H:%M:%S") -> str | None:
-        pass
+        ...
 
     @property
     def run_timestamp_raw(self) -> float | None:
-        pass
+        ...
 
     def completed_timestamp(self, fmt: str = "%Y-%m-%d %H:%M:%S") -> str | None:
-        pass
+        ...
 
     @property
     def completed_timestamp_raw(self) -> float | None:
-        pass
+        ...
 
     # snapshot and metadata
     @property
     def snapshot(self) -> dict[str, Any] | None:
-        pass
+        ...
 
     def add_snapshot(self, snapshot: str, overwrite: bool = False) -> None:
-        pass
+        ...
 
     @property
     def _snapshot_raw(self) -> str | None:
-        pass
+        ...
 
     def add_metadata(self, tag: str, metadata: Any) -> None:
-        pass
+        ...
 
     @property
     def metadata(self) -> dict[str, Any]:
-        pass
+        ...
 
     @property
     def path_to_db(self) -> str | None:
-        pass
+        ...
 
     # dataset description and links
     @property
     def paramspecs(self) -> dict[str, ParamSpec]:
-        pass
+        ...
 
     @property
     def description(self) -> RunDescriber:
-        pass
+        ...
 
     @property
     def parent_dataset_links(self) -> list[Link]:
-        pass
+        ...
 
     # data related members
 
@@ -215,32 +232,34 @@ class DataSetProtocol(Protocol, Sized):
         export_type: DataExportType | str | None = None,
         path: str | None = None,
         prefix: str | None = None,
+        automatic_export: bool = False,
     ) -> None:
-        pass
+        ...
 
     @property
     def export_info(self) -> ExportInfo:
-        pass
+        ...
 
     @property
     def cache(self) -> DataSetCache[DataSetProtocol]:
-        pass
+        ...
 
     def get_parameter_data(
         self,
         *params: str | ParamSpec | ParameterBase,
         start: int | None = None,
         end: int | None = None,
+        callback: Callable[[float], None] | None = None,
     ) -> ParameterData:
-        pass
+        ...
 
     def get_parameters(self) -> SPECS:
         # used by plottr
-        pass
+        ...
 
     @property
     def dependent_parameters(self) -> tuple[ParamSpecBase, ...]:
-        pass
+        ...
 
     # exporters to other in memory formats
 
@@ -250,7 +269,7 @@ class DataSetProtocol(Protocol, Sized):
         start: int | None = None,
         end: int | None = None,
     ) -> dict[str, xr.DataArray]:
-        pass
+        ...
 
     def to_xarray_dataset(
         self,
@@ -258,7 +277,7 @@ class DataSetProtocol(Protocol, Sized):
         start: int | None = None,
         end: int | None = None,
     ) -> xr.Dataset:
-        pass
+        ...
 
     def to_pandas_dataframe_dict(
         self,
@@ -266,7 +285,7 @@ class DataSetProtocol(Protocol, Sized):
         start: int | None = None,
         end: int | None = None,
     ) -> dict[str, pd.DataFrame]:
-        pass
+        ...
 
     def to_pandas_dataframe(
         self,
@@ -274,25 +293,31 @@ class DataSetProtocol(Protocol, Sized):
         start: int | None = None,
         end: int | None = None,
     ) -> pd.DataFrame:
-        pass
+        ...
 
     # private members called by various other parts or the api
 
     def _enqueue_results(self, result_dict: Mapping[ParamSpecBase, np.ndarray]) -> None:
-        pass
+        ...
 
     def _flush_data_to_database(self, block: bool = False) -> None:
-        pass
+        ...
 
     @property
     def _parameters(self) -> str | None:
-        pass
+        ...
 
     def _set_export_info(self, export_info: ExportInfo) -> None:
-        pass
+        ...
+
+    def __len__(self) -> int:
+        ...
+
+    def the_same_dataset_as(self, other: DataSetProtocol) -> bool:
+        ...
 
 
-class BaseDataSet(DataSetProtocol):
+class BaseDataSet(DataSetProtocol, Protocol):
 
     # shared methods between all implementations of the dataset
 
@@ -335,8 +360,9 @@ class BaseDataSet(DataSetProtocol):
     def export(
         self,
         export_type: DataExportType | str | None = None,
-        path: str | None = None,
+        path: str | Path | None = None,
         prefix: str | None = None,
+        automatic_export: bool = False,
     ) -> None:
         """Export data to disk with file name `{prefix}{name_elements}.{ext}`.
         Name elements are names of dataset object attributes that are taken
@@ -356,6 +382,9 @@ class BaseDataSet(DataSetProtocol):
             ValueError: If the export data type is not specified or unknown,
                 raise an error
         """
+        if isinstance(path, str):
+            path = Path(path)
+
         parsed_export_type = get_data_export_type(export_type)
 
         if parsed_export_type is None and export_type is None:
@@ -371,7 +400,10 @@ class BaseDataSet(DataSetProtocol):
             )
 
         export_path = self._export_data(
-            export_type=parsed_export_type, path=path, prefix=prefix
+            export_type=parsed_export_type,
+            path=path,
+            prefix=prefix,
+            automatic_export=automatic_export,
         )
         export_info = self.export_info
         if export_path is not None:
@@ -384,9 +416,10 @@ class BaseDataSet(DataSetProtocol):
     def _export_data(
         self,
         export_type: DataExportType,
-        path: str | None = None,
+        path: Path | None = None,
         prefix: str | None = None,
-    ) -> str | None:
+        automatic_export: bool = False,
+    ) -> Path | None:
         """Export data to disk with file name `{prefix}{name_elements}.{ext}`.
         Name elements are names of dataset object attributes that are taken
         from the dataset and inserted into the name of the export file, for
@@ -406,22 +439,33 @@ class BaseDataSet(DataSetProtocol):
         # Set defaults to values in config if the value was not set
         # (defaults to None)
         path = path if path is not None else get_data_export_path()
+        path.mkdir(exist_ok=True, parents=True)
         prefix = prefix if prefix is not None else get_data_export_prefix()
 
         if DataExportType.NETCDF == export_type:
             file_name = self._export_file_name(
                 prefix=prefix, export_type=DataExportType.NETCDF
             )
-            return self._export_as_netcdf(path=path, file_name=file_name)
+            export_path = Path(self._export_as_netcdf(path=path, file_name=file_name))
 
         elif DataExportType.CSV == export_type:
             file_name = self._export_file_name(
                 prefix=prefix, export_type=DataExportType.CSV
             )
-            return self._export_as_csv(path=path, file_name=file_name)
+            export_path = Path(self._export_as_csv(path=path, file_name=file_name))
 
         else:
-            return None
+            export_path = None
+
+        for export_callback in _EXPORT_CALLBACKS:
+            try:
+                export_callback_function = export_callback.load()
+                LOG.info("Executing on_export callback %s", export_callback.name)
+                export_callback_function(export_path, automatic_export=automatic_export)
+            except Exception:
+                LOG.exception("Exception during export callback function")
+
+        return export_path
 
     def _export_file_name(self, prefix: str, export_type: DataExportType) -> str:
         """Get export file name"""
@@ -430,14 +474,14 @@ class BaseDataSet(DataSetProtocol):
         post_fix = "_".join([str(getattr(self, name)) for name in name_elements])
         return f"{prefix}{post_fix}.{extension}"
 
-    def _export_as_netcdf(self, path: str, file_name: str) -> str:
+    def _export_as_netcdf(self, path: Path, file_name: str) -> Path:
         """Export data as netcdf to a given path with file prefix"""
-        file_path = os.path.join(path, file_name)
+        file_path = path / file_name
         xarr_dataset = self.to_xarray_dataset()
         xarray_to_h5netcdf_with_complex_numbers(xarr_dataset, file_path)
         return file_path
 
-    def _export_as_csv(self, path: str, file_name: str) -> str:
+    def _export_as_csv(self, path: Path, file_name: str) -> Path:
         """Export data as csv to a given path with file prefix."""
         dfdict = self.to_pandas_dataframe_dict()
         dataframe_to_csv(
@@ -446,7 +490,7 @@ class BaseDataSet(DataSetProtocol):
             single_file=True,
             single_file_name=file_name,
         )
-        return os.path.join(path, file_name)
+        return path / file_name
 
     def _add_metadata_to_netcdf_if_nc_exported(self, tag: str, data: Any) -> None:
         export_paths = self.export_info.export_paths

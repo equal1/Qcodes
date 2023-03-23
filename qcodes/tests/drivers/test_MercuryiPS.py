@@ -1,21 +1,20 @@
 import logging
 
-import hypothesis as hst
+import hypothesis.strategies as hst
 import numpy as np
 import pytest
-from hypothesis import HealthCheck, settings
+from hypothesis import HealthCheck, given, settings
+from pytest import LogCaptureFixture
 
-import qcodes.instrument.sims as sims
 from qcodes.instrument_drivers.oxford.MercuryiPS_VISA import MercuryiPS
 from qcodes.math_utils.field_vector import FieldVector
-
-visalib = sims.__file__.replace('__init__.py', 'MercuryiPS.yaml@sim')
 
 
 @pytest.fixture(scope='function')
 def driver():
-    mips = MercuryiPS('mips', address='GPIB::1::INSTR',
-                      visalib=visalib)
+    mips = MercuryiPS(
+        "mips", address="GPIB::1::INSTR", pyvisa_sim_file="MercuryiPS.yaml"
+    )
     yield mips
     mips.close()
 
@@ -29,8 +28,12 @@ def driver_spher_lim():
         """
         return np.sqrt(x**2 + y**2 + z**2) <= 2
 
-    mips_sl = MercuryiPS('mips_sl', address='GPIB::1::INSTR',
-                         visalib=visalib, field_limits=spherical_limits)
+    mips_sl = MercuryiPS(
+        "mips_sl",
+        address="GPIB::1::INSTR",
+        pyvisa_sim_file="MercuryiPS.yaml",
+        field_limits=spherical_limits,
+    )
 
     yield mips_sl
     mips_sl.close()
@@ -47,18 +50,22 @@ def driver_cyl_lim():
 
         return rho_check and z_check
 
-    mips_cl = MercuryiPS('mips_cl', address='GPIB::1::INSTR',
-                         visalib=visalib, field_limits=cylindrical_limits)
+    mips_cl = MercuryiPS(
+        "mips_cl",
+        address="GPIB::1::INSTR",
+        pyvisa_sim_file="MercuryiPS.yaml",
+        field_limits=cylindrical_limits,
+    )
 
     yield mips_cl
     mips_cl.close()
 
 
-def test_idn(driver):
+def test_idn(driver) -> None:
     assert driver.IDN()['model'] == 'SIMULATED MERCURY iPS'
 
 
-def test_simple_setting(driver):
+def test_simple_setting(driver) -> None:
     """
     Some very simple setting of parameters. Mainly just to
     sanity-check the pyvisa-sim setup.
@@ -68,7 +75,7 @@ def test_simple_setting(driver):
     assert driver.GRPX.field_target() == 0.1
 
 
-def test_vector_setting(driver):
+def test_vector_setting(driver) -> None:
     assert driver.field_target().distance(FieldVector(0, 0, 0)) <= 1e-8
     driver.field_target(FieldVector(r=0.1, theta=0, phi=0))
     assert driver.field_target().distance(
@@ -76,25 +83,31 @@ def test_vector_setting(driver):
     ) <= 1e-8
 
 
-def test_vector_ramp_rate(driver):
+def test_vector_ramp_rate(driver) -> None:
     driver.field_ramp_rate(FieldVector(0.1, 0.1, 0.1))
     assert driver.field_ramp_rate().distance(
         FieldVector(0.1, 0.1, 0.1)
     ) <= 1e-8
 
 
-def test_wrong_field_limit_raises():
+def test_wrong_field_limit_raises() -> None:
     # check that a non-callable input fails
     with pytest.raises(ValueError):
-        MercuryiPS('mips', address='GPIB::1::INSTR', visalib=visalib,
-                   field_limits=0)
+        MercuryiPS(
+            "mips",
+            address="GPIB::1::INSTR",
+            pyvisa_sim_file="MercuryiPS.yaml",
+            field_limits=0,  # type: ignore[arg-type]
+        )
 
 
 @settings(suppress_health_check=(HealthCheck.function_scoped_fixture,))
-@hst.given(x=hst.strategies.floats(min_value=-3, max_value=3),
-           y=hst.strategies.floats(min_value=-3, max_value=3),
-           z=hst.strategies.floats(min_value=-3, max_value=3))
-def test_field_limits(x, y, z, driver_spher_lim, driver_cyl_lim):
+@given(
+    x=hst.floats(min_value=-3, max_value=3),
+    y=hst.floats(min_value=-3, max_value=3),
+    z=hst.floats(min_value=-3, max_value=3),
+)
+def test_field_limits(x, y, z, driver_spher_lim, driver_cyl_lim) -> None:
     """
     Try with a few different field_limits functions and see if we get no-go
     exceptions when we expect them
@@ -135,10 +148,12 @@ def get_ramp_order(caplog_records):
 
 
 @settings(suppress_health_check=(HealthCheck.function_scoped_fixture,))
-@hst.given(x=hst.strategies.floats(min_value=-3, max_value=3),
-           y=hst.strategies.floats(min_value=-3, max_value=3),
-           z=hst.strategies.floats(min_value=-3, max_value=3))
-def test_ramp_safely(driver, x, y, z, caplog):
+@given(
+    x=hst.floats(min_value=-3, max_value=3),
+    y=hst.floats(min_value=-3, max_value=3),
+    z=hst.floats(min_value=-3, max_value=3),
+)
+def test_ramp_safely(driver, x, y, z, caplog: LogCaptureFixture) -> None:
     """
     Test that we get the first-down-then-up order right
     """

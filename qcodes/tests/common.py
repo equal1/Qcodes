@@ -1,23 +1,30 @@
+from __future__ import annotations
+
 import copy
 import cProfile
 import os
 import tempfile
 from contextlib import contextmanager
 from functools import wraps
+from pathlib import Path
 from time import sleep
-from typing import TYPE_CHECKING, Any, Callable, Dict, Hashable, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any, Callable, Generator, Mapping, Sequence, TypeVar
 
 import pytest
+from typing_extensions import ParamSpec
 
 import qcodes
 from qcodes.configuration import Config, DotDict
-from qcodes.metadatable import Metadatable
+from qcodes.metadatable import MetadatableWithName
+from qcodes.utils import deprecate
 
 if TYPE_CHECKING:
     from pytest import ExceptionInfo
 
 
-def strip_qc(d, keys=('instrument', '__class__')):
+def strip_qc(
+    d: dict[str, Any], keys: Sequence[str] = ("instrument", "__class__")
+) -> dict[str, Any]:
     # depending on how you run the tests, __module__ can either
     # have qcodes on the front or not. Just strip it off.
     for key in keys:
@@ -25,12 +32,14 @@ def strip_qc(d, keys=('instrument', '__class__')):
             d[key] = d[key].replace('qcodes.tests.', 'tests.')
     return d
 
+T = TypeVar("T")
+P = ParamSpec("P")
 
 def retry_until_does_not_throw(
-        exception_class_to_expect: Type[Exception] = AssertionError,
-        tries: int = 5,
-        delay: float = 0.1
-) -> Callable[..., Any]:
+    exception_class_to_expect: type[Exception] = AssertionError,
+    tries: int = 5,
+    delay: float = 0.1,
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """
     Call the decorated function given number of times with given delay between
     the calls until it does not throw an exception of a given class.
@@ -62,10 +71,11 @@ def retry_until_does_not_throw(
         A callable that runs the decorated function until it does not throw
         a given exception
     """
-    def retry_until_passes_decorator(func: Callable[..., Any]):
+
+    def retry_until_passes_decorator(func: Callable[P, T]) -> Callable[P, T]:
 
         @wraps(func)
-        def func_retry(*args, **kwargs):
+        def func_retry(*args: P.args, **kwargs: P.kwargs) -> T:
             tries_left = tries - 1
             while tries_left > 0:
                 try:
@@ -83,7 +93,7 @@ def retry_until_does_not_throw(
     return retry_until_passes_decorator
 
 
-def profile(func):
+def profile(func: Callable[P, T]) -> Callable[P, T]:
     """
     Decorator that profiles the wrapped function with cProfile.
 
@@ -95,7 +105,8 @@ def profile(func):
     where 'p' is an instance of the 'Stats' class), and print the data
     (for example, 'p.print_stats()').
     """
-    def wrapper(*args, **kwargs):
+
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         profile_filename = func.__name__ + '.prof'
         profiler = cProfile.Profile()
         result = profiler.runcall(func, *args, **kwargs)
@@ -104,7 +115,7 @@ def profile(func):
     return wrapper
 
 
-def error_caused_by(excinfo: 'ExceptionInfo[Any]', cause: str) -> bool:
+def error_caused_by(excinfo: ExceptionInfo[Any], cause: str) -> bool:
     """
     Helper function to figure out whether an exception was caused by another
     exception with the message provided.
@@ -134,7 +145,7 @@ def error_caused_by(excinfo: 'ExceptionInfo[Any]', cause: str) -> bool:
         return False
 
 
-def skip_if_no_fixtures(dbname):
+def skip_if_no_fixtures(dbname: str | Path) -> None:
     if not os.path.exists(dbname):
         pytest.skip(
             "No db-file fixtures found. "
@@ -143,25 +154,33 @@ def skip_if_no_fixtures(dbname):
         )
 
 
-class DumyPar(Metadatable):
+class DummyComponent(MetadatableWithName):
 
-    """Docstring for DumyPar. """
+    """Docstring for DummyComponent."""
 
-    def __init__(self, name):
+    def __init__(self, name: str):
         super().__init__()
         self.name = name
-        self.full_name = name
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.full_name
 
-    def set(self, value):
+    def set(self, value: float) -> float:
         value = value * 2
         return value
 
+    @property
+    def short_name(self) -> str:
+        return self.name
 
+    @property
+    def full_name(self) -> str:
+        return self.full_name
+
+
+@deprecate(reason="Unused internally", alternative="default_config fixture")
 @contextmanager
-def default_config(user_config: Optional[str] = None):
+def default_config(user_config: str | None = None) -> Generator[None, None, None]:
     """
     Context manager to temporarily establish default config settings.
     This is achieved by overwriting the config paths of the user-,
@@ -195,8 +214,7 @@ def default_config(user_config: Optional[str] = None):
         Config.cwd_file_name = ''
         Config.schema_cwd_file_name = ''
 
-        default_config_obj: Optional[DotDict] = copy.\
-            deepcopy(qcodes.config.current_config)
+        default_config_obj: DotDict | None = copy.deepcopy(qcodes.config.current_config)
         qcodes.config = Config()
 
         try:
@@ -212,16 +230,14 @@ def default_config(user_config: Optional[str] = None):
             qcodes.config.current_config = default_config_obj
 
 
+@deprecate(reason="Unused internally", alternative="reset_config_on_exit fixture")
 @contextmanager
-def reset_config_on_exit():
+def reset_config_on_exit() -> Generator[None, None, None]:
     """
-    Context manager to clean any modefication of the in memory config on exit
+    Context manager to clean any modification of the in memory config on exit
 
     """
-
-    default_config_obj: Optional[DotDict] = copy.deepcopy(
-        qcodes.config.current_config
-    )
+    default_config_obj: DotDict | None = copy.deepcopy(qcodes.config.current_config)
 
     try:
         yield
@@ -230,12 +246,12 @@ def reset_config_on_exit():
 
 
 def compare_dictionaries(
-    dict_1: Dict[Hashable, Any],
-    dict_2: Dict[Hashable, Any],
-    dict_1_name: Optional[str] = "d1",
-    dict_2_name: Optional[str] = "d2",
+    dict_1: Mapping[Any, Any],
+    dict_2: Mapping[Any, Any],
+    dict_1_name: str | None = "d1",
+    dict_2_name: str | None = "d2",
     path: str = "",
-) -> Tuple[bool, str]:
+) -> tuple[bool, str]:
     """
     Compare two dictionaries recursively to find non matching elements.
 

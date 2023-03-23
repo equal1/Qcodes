@@ -6,11 +6,11 @@ from pathlib import Path
 from unittest.mock import PropertyMock, mock_open
 
 import jsonschema
+import jsonschema.exceptions
 import pytest
 
 import qcodes
 from qcodes.configuration import Config
-from qcodes.tests.common import default_config
 
 VALID_JSON = "{}"
 ENV_KEY = "/dev/random"
@@ -192,18 +192,16 @@ def _make_mock_config(mocker):
     yield load_config
 
 
-def test_missing_config_file(config):
+def test_missing_config_file(config) -> None:
     with pytest.raises(FileNotFoundError):
         config.load_config("./missing.json")
 
 
-@pytest.mark.skipif(Path.cwd() == Path.home(),
-                    reason="This test requires that "
-                           "working dir is different from homedir.")
-def test_default_config_files(
-        config,
-        load_config
-):
+@pytest.mark.skipif(
+    Path.cwd() == Path.home(),
+    reason="This test requires that " "working dir is different from homedir.",
+)
+def test_default_config_files(config, load_config) -> None:
     load_config.side_effect = partial(side_effect, GOOD_CONFIG_MAP)
     # don't try to load custom schemas
     config.schema_cwd_file_name = None
@@ -217,7 +215,7 @@ def test_default_config_files(
 @pytest.mark.skipif(Path.cwd() == Path.home(),
                     reason="This test requires that "
                            "working dir is different from homedir.")
-def test_bad_config_files(config, load_config):
+def test_bad_config_files(config, load_config) -> None:
 
     load_config.side_effect = partial(side_effect, BAD_CONFIG_MAP)
     # don't try to load custom schemas
@@ -232,7 +230,7 @@ def test_bad_config_files(config, load_config):
 @pytest.mark.skipif(Path.cwd() == Path.home(),
                     reason="This test requires that "
                            "working dir is different from homedir.")
-def test_user_schema(config, load_config, mocker):
+def test_user_schema(config, load_config, mocker) -> None:
     mocker.patch("builtins.open", mock_open(read_data=USER_SCHEMA))
     load_config.side_effect = partial(side_effect, GOOD_CONFIG_MAP)
     config.defaults, _ = config.load_default()
@@ -240,7 +238,7 @@ def test_user_schema(config, load_config, mocker):
     assert config == CONFIG
 
 
-def test_bad_user_schema(config, load_config, mocker):
+def test_bad_user_schema(config, load_config, mocker) -> None:
     mocker.patch("builtins.open", mock_open(read_data=USER_SCHEMA))
     load_config.side_effect = partial(side_effect, BAD_CONFIG_MAP)
     with pytest.raises(jsonschema.exceptions.ValidationError):
@@ -248,7 +246,7 @@ def test_bad_user_schema(config, load_config, mocker):
         config.update_config()
 
 
-def test_update_user_config(config, mocker):
+def test_update_user_config(config, mocker) -> None:
 
     myconfig = mocker.patch.object(
         Config,
@@ -262,7 +260,7 @@ def test_update_user_config(config, mocker):
     assert config.current_config == UPDATED_CONFIG
 
 
-def test_update_and_validate_user_config(config, mocker):
+def test_update_and_validate_user_config(config, mocker) -> None:
 
     myconfig = mocker.patch.object(
         Config,
@@ -282,27 +280,26 @@ def test_update_and_validate_user_config(config, mocker):
     assert config.current_schema == UPDATED_SCHEMA
 
 
-def test_update_from_path(path_to_config_file_on_disk):
-    with default_config():
-        cfg = qcodes.config
+@pytest.mark.usefixtures("default_config")
+def test_update_from_path(path_to_config_file_on_disk) -> None:
+    cfg = qcodes.config
 
-        # check that the default is still the default
-        assert cfg["core"]["db_debug"] is False
+    # check that the default is still the default
+    assert cfg["core"]["db_debug"] is False
 
-        cfg.update_config(path=path_to_config_file_on_disk)
-        assert cfg['core']['db_debug'] is True
+    cfg.update_config(path=path_to_config_file_on_disk)
+    assert cfg["core"]["db_debug"] is True
 
-        # check that the settings NOT specified in our config file on path
-        # are still saved as configurations
-        assert cfg['gui']['notebook'] is True
-        assert cfg['station']['default_folder'] == '.'
+    # check that the settings NOT specified in our config file on path
+    # are still saved as configurations
+    assert cfg["gui"]["notebook"] is True
+    assert cfg["station"]["default_folder"] == "."
 
-        expected_path = os.path.join(path_to_config_file_on_disk,
-                                     'qcodesrc.json')
-        assert cfg.current_config_path == expected_path
+    expected_path = os.path.join(path_to_config_file_on_disk, "qcodesrc.json")
+    assert cfg.current_config_path == expected_path
 
 
-def test_repr():
+def test_repr() -> None:
     cfg = qcodes.config
     rep = cfg.__repr__()
 
@@ -313,24 +310,30 @@ def test_repr():
     assert rep == expected_rep
 
 
-def test_add_and_describe():
+@pytest.mark.usefixtures("default_config")
+def test_add_and_describe() -> None:
     """
-    Test that a key an be added and described
+    Test that a key can be added and described
     """
-    with default_config():
+    key = "newkey"
+    value = "testvalue"
+    value_type = "string"
+    description = "A test"
+    default = "testdefault"
 
-        key = 'newkey'
-        value = 'testvalue'
-        value_type = 'string'
-        description = 'A test'
-        default = 'testdefault'
+    cfg = qcodes.config
+    cfg.add(
+        key=key,
+        value=value,
+        value_type=value_type,
+        description=description,
+        default=default,
+    )
 
-        cfg = qcodes.config
-        cfg.add(key=key, value=value, value_type=value_type,
-                description=description, default=default)
+    desc = cfg.describe(f"user.{key}")
+    expected_desc = (
+        f"{description}.\nCurrent value: {value}. "
+        f"Type: {value_type}. Default: {default}."
+    )
 
-        desc = cfg.describe(f'user.{key}')
-        expected_desc = (f"{description}.\nCurrent value: {value}. "
-                         f"Type: {value_type}. Default: {default}.")
-
-        assert desc == expected_desc
+    assert desc == expected_desc

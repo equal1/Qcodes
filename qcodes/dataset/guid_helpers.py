@@ -4,7 +4,7 @@ import ast
 import gc
 from pathlib import Path
 from sqlite3 import DatabaseError
-from typing import Dict, Iterable, List, Optional, Tuple, Union, cast
+from typing import Iterable, Tuple, cast
 
 from qcodes.dataset.data_set import get_guids_by_run_spec
 from qcodes.dataset.guids import validate_guid_format
@@ -26,13 +26,15 @@ def guids_from_dbs(
     """
     dbdict = {}
     for p in db_paths:
+        conn = None
         try:
             conn = connect(str(p))
             dbdict[p] = get_guids_by_run_spec(conn=conn)
         except (RuntimeError, DatabaseError) as e:
             print(e)
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()
             gc.collect()
     guiddict = {}
     for dbpath, guids in dbdict.items():

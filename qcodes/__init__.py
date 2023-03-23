@@ -85,24 +85,6 @@ if config.core.import_legacy_api:
         QCoDeSDeprecationWarning,
     )
 
-
-try:
-    _register_magic = config.core.get('register_magic', False)
-    if _register_magic is not False:
-        from IPython import get_ipython
-
-        # Check if we are in IPython
-        ip = get_ipython()
-        if ip is not None:
-            from qcodes.utils.magic import register_magic_class
-
-            register_magic_class(magic_commands=_register_magic)
-except ImportError:
-    pass
-except RuntimeError as e:
-    print(e)
-
-
 def test(**kwargs: Any) -> int:
     """
     Run QCoDeS tests. This requires the test requirements given

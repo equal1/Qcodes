@@ -38,10 +38,7 @@ from qcodes.dataset.sqlite.database import (
     connect,
     get_DB_location,
 )
-from qcodes.dataset.sqlite.queries import (
-    get_guids_from_run_spec,  # for backwards compatibility
-)
-from qcodes.dataset.sqlite.queries import (
+from qcodes.dataset.sqlite.queries import (  # noqa: F401 for backwards compatibility
     _check_if_table_found,
     _get_result_table_name_by_guid,
     _query_guids_from_run_spec,
@@ -54,6 +51,7 @@ from qcodes.dataset.sqlite.queries import (
     get_experiment_name_from_experiment_id,
     get_guid_from_expid_and_counter,
     get_guid_from_run_id,
+    get_guids_from_run_spec,
     get_metadata_from_run_id,
     get_parameter_data,
     get_parent_dataset_links,
@@ -762,6 +760,7 @@ class DataSet(BaseDataSet):
         *params: str | ParamSpec | ParameterBase,
         start: int | None = None,
         end: int | None = None,
+        callback: Callable[[float], None] | None = None,
     ) -> ParameterData:
         """
         Returns the values stored in the :class:`.DataSet` for the specified parameters
@@ -801,6 +800,8 @@ class DataSet(BaseDataSet):
                 if None
             end: end value of selection range (by results count); ignored if
                 None
+            callback: Function called during the data loading every
+                config.dataset.callback_percent.
 
         Returns:
             Dictionary from requested parameters to Dict of parameter names
@@ -812,8 +813,9 @@ class DataSet(BaseDataSet):
                                  for ps in self._rundescriber.interdeps.non_dependencies]
         else:
             valid_param_names = self._validate_parameters(*params)
-        return get_parameter_data(self.conn, self.table_name,
-                                  valid_param_names, start, end)
+        return get_parameter_data(
+            self.conn, self.table_name, valid_param_names, start, end, callback
+        )
 
     def to_pandas_dataframe_dict(
         self,
@@ -1225,8 +1227,9 @@ class DataSet(BaseDataSet):
 
         toplevel_params = (set(interdeps.dependencies)
                            .intersection(set(result_dict)))
-        if self._in_memory_cache:
-            new_results: dict[str, dict[str, numpy.ndarray]] = {}
+
+        new_results: dict[str, dict[str, numpy.ndarray]] = {}
+
         for toplevel_param in toplevel_params:
             inff_params = set(interdeps.inferences.get(toplevel_param, ()))
             deps_params = set(interdeps.dependencies.get(toplevel_param, ()))
@@ -1349,7 +1352,7 @@ class DataSet(BaseDataSet):
                     flat_results[dep.name] = result_dict[dep].ravel()
             for inff in inff_params:
                 if numpy.shape(result_dict[inff]) == ():
-                    flat_results[inff.name] = numpy.repeat(result_dict[dep], N)
+                    flat_results[inff.name] = numpy.repeat(result_dict[inff], N)
                 else:
                     flat_results[inff.name] = result_dict[inff].ravel()
 
@@ -1371,21 +1374,28 @@ class DataSet(BaseDataSet):
         for param, value in result_dict.items():
             if param.type == 'text':
                 if value.shape:
-                    res_list += [{param.name: str(val)} for val in value]
+                    new_res: list[dict[str, VALUE]] = [
+                        {param.name: str(val)} for val in value
+                    ]
+                    res_list += new_res
                 else:
-                    res_list += [{param.name: str(value)}]
+                    new_res = [{param.name: str(value)}]
+                    res_list += new_res
             elif param.type == 'numeric':
                 if value.shape:
                     res_list += [{param.name: number} for number in value]
                 else:
-                    res_list += [{param.name: float(value)}]
+                    new_res = [{param.name: float(value)}]
+                    res_list += new_res
             elif param.type == 'complex':
                 if value.shape:
                     res_list += [{param.name: number} for number in value]
                 else:
-                    res_list += [{param.name: complex(value)}]
+                    new_res = [{param.name: complex(value)}]
+                    res_list += new_res
             else:
-                res_list += [{param.name: value}]
+                new_res = [{param.name: value}]
+                res_list += new_res
 
         return res_list
 
@@ -1407,9 +1417,9 @@ class DataSet(BaseDataSet):
 
                 self.add_results(self._results)
                 if writer_status.write_in_background:
-                    log.debug(f"Succesfully enqueued result for write thread")
+                    log.debug("Successfully enqueued result for write thread")
                 else:
-                    log.debug(f'Successfully wrote result to disk')
+                    log.debug("Successfully wrote result to disk")
                 self._results = []
             except Exception as e:
                 if writer_status.write_in_background:
@@ -1420,7 +1430,7 @@ class DataSet(BaseDataSet):
             log.debug('No results to flush')
 
         if writer_status.write_in_background and block:
-            log.debug(f"Waiting for write queue to empty.")
+            log.debug("Waiting for write queue to empty.")
             writer_status.data_write_queue.join()
 
     @property
@@ -1773,15 +1783,27 @@ def generate_dataset_table(
     Returns: ASCII art table of information about the supplied guids.
     """
     from tabulate import tabulate
-    headers = ["captured_run_id", "captured_counter", "experiment_name",
-               "sample_name",
-               "sample_id", "location", "work_station"]
+
+    headers = (
+        "captured_run_id",
+        "captured_counter",
+        "experiment_name",
+        "sample_name",
+        "location",
+        "work_station",
+    )
     table = []
     for guid in guids:
         ds = load_by_guid(guid, conn=conn)
         parsed_guid = parse_guid(guid)
-        table.append([ds.captured_run_id, ds.captured_counter, ds.exp_name,
-                      ds.sample_name,
-                      parsed_guid['sample'], parsed_guid['location'],
-                      parsed_guid['work_station']])
+        table.append(
+            [
+                ds.captured_run_id,
+                ds.captured_counter,
+                ds.exp_name,
+                ds.sample_name,
+                parsed_guid["location"],
+                parsed_guid["work_station"],
+            ]
+        )
     return tabulate(table, headers=headers)

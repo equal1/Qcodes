@@ -3,18 +3,17 @@ import hypothesis.strategies as st
 import pytest
 from hypothesis import given
 
-import qcodes.instrument.sims as sims
 from qcodes.instrument_drivers.Keysight.keysight_34934a import Keysight34934A
 from qcodes.instrument_drivers.Keysight.keysight_34980a import Keysight34980A
-
-VISALIB = sims.__file__.replace('__init__.py', 'keysight_34980A.yaml@sim')
 
 
 @pytest.fixture(scope="module")
 def switch_driver():
-    inst = Keysight34980A('keysight_34980A_sim',
-                          address='GPIB::1::INSTR',
-                          visalib=VISALIB)
+    inst = Keysight34980A(
+        "keysight_34980A_sim",
+        address="GPIB::1::INSTR",
+        pyvisa_sim_file="keysight_34980A.yaml",
+    )
 
     try:
         yield inst
@@ -22,14 +21,14 @@ def switch_driver():
         inst.close()
 
 
-def test_protection_mode(switch_driver):
+def test_protection_mode(switch_driver) -> None:
     """
     to check the protection mode (34934A module only)
     """
     assert switch_driver.module[1].protection_mode() == 'AUTO100'
 
 
-def test_connection(switch_driver):
+def test_connection(switch_driver) -> None:
     """
     to check if a channel is closed or open
     """
@@ -46,7 +45,7 @@ def test_connection(switch_driver):
     st.integers(1, 4),
     st.integers(1, 32)
 )
-def test_4x32(config, row, column):
+def test_4x32(config, row, column) -> None:
     f = Keysight34934A.get_numbering_function(4, 32, config)
     g = numbering_function_4x32(config)
     assert f(row, column) == g(row, column)
@@ -57,7 +56,7 @@ def test_4x32(config, row, column):
     st.integers(1, 4),
     st.integers(1, 64)
 )
-def test_4x64(config, row, column):
+def test_4x64(config, row, column) -> None:
     f = Keysight34934A.get_numbering_function(4, 64, config)
     g = numbering_function_4x64(config)
     assert f(row, column) == g(row, column)
@@ -67,7 +66,7 @@ def test_4x64(config, row, column):
     st.integers(1, 4),
     st.integers(1, 128)
 )
-def test_4x128(row, column):
+def test_4x128(row, column) -> None:
     f = Keysight34934A.get_numbering_function(4, 128)
     g = numbering_function_4x128()
     assert f(row, column) == g(row, column)
@@ -78,7 +77,7 @@ def test_4x128(row, column):
     st.integers(1, 8),
     st.integers(1, 32)
 )
-def test_8x32(config, row, column):
+def test_8x32(config, row, column) -> None:
     f = Keysight34934A.get_numbering_function(8, 32, config)
     g = numbering_function_8x32(config)
     assert f(row, column) == g(row, column)
@@ -88,7 +87,7 @@ def test_8x32(config, row, column):
     st.integers(1, 8),
     st.integers(1, 64)
 )
-def test_8x64(row, column):
+def test_8x64(row, column) -> None:
     f = Keysight34934A.get_numbering_function(8, 64)
     g = numbering_function_8x64()
     assert f(row, column) == g(row, column)
@@ -98,7 +97,7 @@ def test_8x64(row, column):
     st.integers(1, 16),
     st.integers(1, 32)
 )
-def test_16x32(row, column):
+def test_16x32(row, column) -> None:
     f = Keysight34934A.get_numbering_function(16, 32)
     g = numbering_function_16x32()
     assert f(row, column) == g(row, column)

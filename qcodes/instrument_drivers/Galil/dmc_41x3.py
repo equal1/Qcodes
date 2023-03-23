@@ -6,12 +6,13 @@ Colloquially known as the "stepper motors".
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+import numpy.typing as npt
 
 from qcodes.instrument import Instrument, InstrumentChannel
 from qcodes.validators import Enum, Ints, Multiples
 
 try:
-    import gclib
+    import gclib  # pyright: ignore[reportMissingImports]
 except ImportError as e:
     raise ImportError(
         "Cannot find gclib library. Download gclib installer from "
@@ -105,12 +106,14 @@ class GalilMotionController(Instrument):
         self.g.GMotionComplete(axes)
 
 
-class VectorMode(InstrumentChannel):
+class GalilDMC4133VectorMode(InstrumentChannel):
     """
     Class to control motors in vector mode
     """
 
-    def __init__(self, parent: "DMC4133Controller", name: str, **kwargs: Any) -> None:
+    def __init__(
+        self, parent: "GalilDMC4133Controller", name: str, **kwargs: Any
+    ) -> None:
         """
         Initializes the vector mode submodule for the controller
 
@@ -225,12 +228,20 @@ class VectorMode(InstrumentChannel):
         self.write(f"CS {coord_sys}")
 
 
-class Motor(InstrumentChannel):
+VectorMode = GalilDMC4133VectorMode
+"""
+Alias for backwards compatibility
+"""
+
+
+class GalilDMC4133Motor(InstrumentChannel):
     """
     Class to control a single motor (independent of possible other motors)
     """
 
-    def __init__(self, parent: "DMC4133Controller", name: str, **kwargs: Any) -> None:
+    def __init__(
+        self, parent: "GalilDMC4133Controller", name: str, **kwargs: Any
+    ) -> None:
         """
         Initializes individual motor submodules
 
@@ -427,7 +438,13 @@ class Motor(InstrumentChannel):
         return float(self.ask(f"QS{self._axis}=?"))
 
 
-class DMC4133Controller(GalilMotionController):
+Motor = GalilDMC4133Motor
+"""
+Alias for backwards compatibility
+"""
+
+
+class GalilDMC4133Controller(GalilMotionController):
     """
     Driver for Galil DMC-4133 Controller
     """
@@ -470,12 +487,12 @@ class DMC4133Controller(GalilMotionController):
         )
 
         self._set_default_update_time()
-        self.add_submodule("motor_a", Motor(self, "A"))
-        self.add_submodule("motor_b", Motor(self, "B"))
-        self.add_submodule("motor_c", Motor(self, "C"))
-        self.add_submodule("plane_ab", VectorMode(self, "AB"))
-        self.add_submodule("plane_bc", VectorMode(self, "BC"))
-        self.add_submodule("plane_ac", VectorMode(self, "AC"))
+        self.add_submodule("motor_a", GalilDMC4133Motor(self, "A"))
+        self.add_submodule("motor_b", GalilDMC4133Motor(self, "B"))
+        self.add_submodule("motor_c", GalilDMC4133Motor(self, "C"))
+        self.add_submodule("plane_ab", GalilDMC4133VectorMode(self, "AB"))
+        self.add_submodule("plane_bc", GalilDMC4133VectorMode(self, "BC"))
+        self.add_submodule("plane_ac", GalilDMC4133VectorMode(self, "AC"))
 
     def _set_default_update_time(self) -> None:
         """
@@ -555,7 +572,13 @@ class DMC4133Controller(GalilMotionController):
             self.motors_off()
 
 
-class Arm:
+DMC4133Controller = GalilDMC4133Controller
+"""
+Alias for backwards compatibility
+"""
+
+
+class GalilDMC4133Arm:
     """
     Module to control probe arm. It is assumed that the chip to be probed has
     one or more rows with each row having one or more pads. Design of the
@@ -573,7 +596,7 @@ class Arm:
     of the chip.
     """
 
-    def __init__(self, controller: DMC4133Controller) -> None:
+    def __init__(self, controller: GalilDMC4133Controller) -> None:
         """
         Initializes the arm class
 
@@ -710,17 +733,21 @@ class Arm:
         ):
             return
 
-        a = np.asarray(self._right_top_position) - np.asarray(
+        right_top_position: npt.NDArray[np.int32] = np.asarray(self._right_top_position)
+        left_bottom_position: npt.NDArray[np.int32] = np.asarray(
             self._left_bottom_position
         )
+        left_top_position: npt.NDArray[np.int32] = np.asarray(self._left_top_position)
+
+        a = right_top_position - left_bottom_position
         self.norm_a = float(np.linalg.norm(a))
         self._a = a / self.norm_a
 
-        b = np.asarray(self._left_top_position) - np.asarray(self._left_bottom_position)
+        b = left_top_position - left_bottom_position
         self.norm_b = float(np.linalg.norm(b))
         self._b = b / self.norm_b
 
-        c = np.asarray(self._right_top_position) - np.asarray(self._left_top_position)
+        c = right_top_position - left_top_position
         self.norm_c = float(np.linalg.norm(c))
         self._c = c / self.norm_c
 
@@ -1075,3 +1102,9 @@ def _calculate_vector_component(vec: float, val: int) -> int:
     assert return_val % 1024 == 0
 
     return return_val
+
+
+Arm = GalilDMC4133Arm
+"""
+Alias for backwards compatibility
+"""

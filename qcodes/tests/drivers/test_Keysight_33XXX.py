@@ -1,24 +1,21 @@
 import pytest
 
-import qcodes.instrument.sims as sims
 from qcodes.instrument_drivers.Keysight.KeysightAgilent_33XXX import (
     WaveformGenerator_33XXX,
 )
 
-visalib = sims.__file__.replace('__init__.py', 'Keysight_33xxx.yaml@sim')
-
 
 @pytest.fixture(scope='module')
 def driver():
-    kw_sim = WaveformGenerator_33XXX('kw_sim',
-                                      address='GPIB::1::INSTR',
-                                      visalib=visalib)
+    kw_sim = WaveformGenerator_33XXX(
+        "kw_sim", address="GPIB::1::INSTR", pyvisa_sim_file="Keysight_33xxx.yaml"
+    )
     yield kw_sim
 
     kw_sim.close()
 
 
-def test_init(driver):
+def test_init(driver) -> None:
 
     idn_dict = driver.IDN()
 
@@ -28,7 +25,7 @@ def test_init(driver):
     assert driver.num_channels == 2
 
 
-def test_sync(driver):
+def test_sync(driver) -> None:
 
     assert driver.sync.output() == 'OFF'
     driver.sync.output('ON')
@@ -40,14 +37,14 @@ def test_sync(driver):
     driver.sync.source(1)
     driver.sync.output('OFF')
 
-def test_channel(driver):
+def test_channel(driver) -> None:
     assert driver.ch1.function_type() == 'SIN'
     driver.ch1.function_type('SQU')
     assert driver.ch1.function_type() == 'SQU'
     driver.ch1.function_type('SIN')
 
 
-def test_burst(driver):
+def test_burst(driver) -> None:
     assert driver.ch1.burst_ncycles() == 1
     driver.ch1.burst_ncycles(10)
     assert driver.ch1.burst_ncycles() == 10

@@ -10,12 +10,14 @@ from enum import Enum
 from functools import partial
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
-import pyvisa as visa
+import pyvisa
+import pyvisa.constants
 from pyvisa.resources.serial import SerialInstrument
 
 from qcodes import validators as vals
 from qcodes.instrument import ChannelList, InstrumentChannel, VisaInstrument
 from qcodes.parameters import MultiChannelInstrumentParameter, ParamRawDataType
+from qcodes.utils import deprecate
 
 LOG = logging.getLogger(__name__)
 
@@ -187,6 +189,7 @@ class QDacMultiChannelParameter(MultiChannelInstrumentParameter):
         return output
 
 
+@deprecate(alternative="QDevil QDAC 1 driver in qcodes_contrib_drivers.")
 class QDac(VisaInstrument):
     """
     Channelised driver for the QDevil QDAC voltage source.
@@ -233,7 +236,7 @@ class QDac(VisaInstrument):
         assert isinstance(handle, SerialInstrument)
         # Communication setup + firmware check
         handle.baud_rate = 460800
-        handle.parity = visa.constants.Parity(0)
+        handle.parity = pyvisa.constants.Parity(0)
         handle.data_bits = 8
         self.set_terminator('\n')
         handle.write_termination = '\n'
@@ -813,10 +816,8 @@ class QDac(VisaInstrument):
         """
         self.write('version')
         fw_str = self._write_response
-        if ((not ("Unrecognized command" in fw_str))
-                and ("Software Version: " in fw_str)):
-            fw_version = float(
-                self._write_response.replace("Software Version: ", ""))
+        if ("Unrecognized command" not in fw_str) and ("Software Version: " in fw_str):
+            fw_version = float(self._write_response.replace("Software Version: ", ""))
         else:
             fw_version = 0.0
         return fw_version
@@ -1023,7 +1024,7 @@ class QDac(VisaInstrument):
             if chan not in range(1, self.num_chans+1):
                 raise ValueError(
                         f'Channel number must be 1-{self.num_chans}.')
-            if not (chan in self._assigned_fgs):
+            if chan not in self._assigned_fgs:
                 self._get_functiongenerator(chan)
 
         # Voltage validation

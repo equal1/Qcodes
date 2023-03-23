@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime as dt
 import io
 import logging
@@ -6,7 +8,7 @@ import time
 import xml.etree.ElementTree as ET
 import zipfile as zf
 from functools import partial
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 from broadbean.sequence import InvalidForgedSequenceError, fs_schema
@@ -117,7 +119,7 @@ class SRValidator(vals.Validator[float]):
     Validator to validate the AWG clock sample rate
     """
 
-    def __init__(self, awg: 'AWG70000A') -> None:
+    def __init__(self, awg: AWG70000A) -> None:
         """
         Args:
             awg: The parent instrument instance. We need this since sample
@@ -476,8 +478,9 @@ class AWG70000A(VisaInstrument):
                                         'Waiting for trigger': '1',
                                         'Running': '2'})
 
+        add_channel_list = self.num_channels > 2
         # We deem 2 channels too few for a channel list
-        if self.num_channels > 2:
+        if add_channel_list:
             chanlist = ChannelList(
                 self, "Channels", Tektronix70000AWGChannel, snapshotable=False
             )
@@ -486,11 +489,16 @@ class AWG70000A(VisaInstrument):
             ch_name = f'ch{ch_num}'
             channel = Tektronix70000AWGChannel(self, ch_name, ch_num)
             self.add_submodule(ch_name, channel)
-            if self.num_channels > 2:
-                chanlist.append(channel)
+            if add_channel_list:
+                # pyright does not seem to understand
+                # that this code can only run iff chanliss is created
+                chanlist.append(channel)  # pyright: ignore[reportUnboundVariable]
 
-        if self.num_channels > 2:
-            self.add_submodule("channels", chanlist.to_channel_tuple())
+        if add_channel_list:
+            self.add_submodule(
+                "channels",
+                chanlist.to_channel_tuple(),  # pyright: ignore[reportUnboundVariable]
+            )
 
         # Folder on the AWG where to files are uplaoded by default
         self.wfmxFileFolder = "\\Users\\OEM\\Documents"
@@ -553,7 +561,7 @@ class AWG70000A(VisaInstrument):
         self.write('AWGControl:STOP')
 
     @property
-    def sequenceList(self) -> List[str]:
+    def sequenceList(self) -> list[str]:
         """
         Return the sequence list as a list of strings
         """
@@ -569,7 +577,7 @@ class AWG70000A(VisaInstrument):
         return slist
 
     @property
-    def waveformList(self) -> List[str]:
+    def waveformList(self) -> list[str]:
         """
         Return the waveform list as a list of strings
         """
@@ -640,8 +648,7 @@ class AWG70000A(VisaInstrument):
 
         return wfmx
 
-    def sendSEQXFile(self, seqx: bytes, filename: str,
-                     path: Optional[str] = None) -> None:
+    def sendSEQXFile(self, seqx: bytes, filename: str, path: str | None = None) -> None:
         """
         Send a binary seqx file to the AWG's memory
 
@@ -658,8 +665,7 @@ class AWG70000A(VisaInstrument):
 
         self._sendBinaryFile(seqx, filename, path)
 
-    def sendWFMXFile(self, wfmx: bytes, filename: str,
-                     path: Optional[str] = None) -> None:
+    def sendWFMXFile(self, wfmx: bytes, filename: str, path: str | None = None) -> None:
         """
         Send a binary wfmx file to the AWG's memory
 
@@ -708,12 +714,12 @@ class AWG70000A(VisaInstrument):
             self.visa_handle.write(f'MMEMory:DELete "{filename}"')
             # if the file does not exist,
             # an error code -256 is put in the error queue
-            resp = self.visa_handle.query(f'SYSTem:ERRor:CODE?')
-            self.log.debug(f'Pre-deletion finished with return code {resp}')
+            resp = self.visa_handle.query("SYSTem:ERRor:CODE?")
+            self.log.debug(f"Pre-deletion finished with return code {resp}")
 
         self.visa_handle.write_raw(msg)
 
-    def loadWFMXFile(self, filename: str, path: Optional[str] = None) -> None:
+    def loadWFMXFile(self, filename: str, path: str | None = None) -> None:
         """
         Loads a wfmx from memory into the waveform list
         Only loading from the C: drive is supported
@@ -733,7 +739,7 @@ class AWG70000A(VisaInstrument):
         # the above command is overlapping, but we want a blocking command
         self.ask("*OPC?")
 
-    def loadSEQXFile(self, filename: str, path: Optional[str] = None) -> None:
+    def loadSEQXFile(self, filename: str, path: str | None = None) -> None:
         """
         Load a seqx file from instrument disk memory. All sequences in the file
         are loaded into the sequence list.
@@ -906,10 +912,10 @@ class AWG70000A(VisaInstrument):
 
     @staticmethod
     def make_SEQX_from_forged_sequence(
-            seq: Dict[int, Dict[Any, Any]],
-            amplitudes: List[float],
-            seqname: str,
-            channel_mapping: Optional[Dict[Union[str, int], int]] = None
+        seq: Mapping[int, Mapping[Any, Any]],
+        amplitudes: Sequence[float],
+        seqname: str,
+        channel_mapping: Mapping[str | int, int] | None = None,
     ) -> bytes:
         """
         Make a .seqx from a forged broadbean sequence.
@@ -935,7 +941,7 @@ class AWG70000A(VisaInstrument):
         except Exception as e:
             raise InvalidForgedSequenceError(e)
 
-        chan_list: List[Union[str, int]] = []
+        chan_list: list[str | int] = []
         for pos1 in seq.keys():
             for pos2 in seq[pos1]['content'].keys():
                 for ch in seq[pos1]['content'][pos2]['data'].keys():
@@ -963,8 +969,8 @@ class AWG70000A(VisaInstrument):
         # STEP 1:
         # Make all .wfmx files
 
-        wfmx_files: List[bytes] = []
-        wfmx_filenames: List[str] = []
+        wfmx_files: list[bytes] = []
+        wfmx_filenames: list[str] = []
 
         for pos1 in seq.keys():
             for pos2 in seq[pos1]['content'].keys():
@@ -989,19 +995,19 @@ class AWG70000A(VisaInstrument):
 
         log.debug(f'Waveforms done: {wfmx_filenames}')
 
-        subseqsml_files: List[str] = []
-        subseqsml_filenames: List[str] = []
+        subseqsml_files: list[str] = []
+        subseqsml_filenames: list[str] = []
 
         for pos1 in seq.keys():
             if seq[pos1]['type'] == 'subsequence':
 
-                ss_wfm_names: List[List[str]] = []
+                ss_wfm_names: list[list[str]] = []
 
                 # we need to "flatten" all the individual dicts of element
                 # sequence options into one dict of lists of sequencing options
                 # and we must also provide default values if nothing
                 # is specified
-                seqings: List[Dict[str, int]] = []
+                seqings: list[dict[str, int]] = []
                 for pos2 in (seq[pos1]['content'].keys()):
                     pos_seqs = seq[pos1]['content'][pos2]['sequencing']
                     pos_seqs['twait'] = pos_seqs.get('twait', 0)
@@ -1037,9 +1043,9 @@ class AWG70000A(VisaInstrument):
         # STEP 3:
         # Make the main .sml file
 
-        asset_names: List[List[str]] = []
+        asset_names: list[list[str]] = []
         seqings = []
-        subseq_positions: List[int] = []
+        subseq_positions: list[int] = []
         for pos1 in seq.keys():
             pos_seqs = seq[pos1]['sequencing']
 
@@ -1099,16 +1105,17 @@ class AWG70000A(VisaInstrument):
         return seqx
 
     @staticmethod
-    def makeSEQXFile(trig_waits: Sequence[int],
-                     nreps: Sequence[int],
-                     event_jumps: Sequence[int],
-                     event_jump_to: Sequence[int],
-                     go_to: Sequence[int],
-                     wfms: Sequence[Sequence[np.ndarray]],
-                     amplitudes: Sequence[float],
-                     seqname: str,
-                     flags: Optional[Sequence[Sequence[Sequence[int]]]] = None
-                     ) -> bytes:
+    def makeSEQXFile(
+        trig_waits: Sequence[int],
+        nreps: Sequence[int],
+        event_jumps: Sequence[int],
+        event_jump_to: Sequence[int],
+        go_to: Sequence[int],
+        wfms: Sequence[Sequence[np.ndarray]],
+        amplitudes: Sequence[float],
+        seqname: str,
+        flags: Sequence[Sequence[Sequence[int]]] | None = None,
+    ) -> bytes:
         """
         Make a full .seqx file (bundle)
         A .seqx file can presumably hold several sequences, but for now
@@ -1165,7 +1172,7 @@ class AWG70000A(VisaInstrument):
                      for el in range(1, elms+1)]
 
         # generate wfmx files for the waveforms
-        flat_wfmxs = [] # type: List[bytes]
+        flat_wfmxs = []
         for amplitude, wfm_lst in zip(amplitudes, wfms):
             flat_wfmxs += [AWG70000A.makeWFMXFile(wfm, amplitude)
                            for wfm in wfm_lst]
@@ -1233,17 +1240,18 @@ class AWG70000A(VisaInstrument):
         return xmlstr
 
     @staticmethod
-    def _makeSMLFile(trig_waits: Sequence[int],
-                     nreps: Sequence[int],
-                     event_jumps: Sequence[int],
-                     event_jump_to: Sequence[int],
-                     go_to: Sequence[int],
-                     elem_names: Sequence[Sequence[str]],
-                     seqname: str,
-                     chans: int,
-                     subseq_positions: Sequence[int] = (),
-                     flags: Optional[Sequence[Sequence[Sequence[int]]]] = None
-                     ) -> str:
+    def _makeSMLFile(
+        trig_waits: Sequence[int],
+        nreps: Sequence[int],
+        event_jumps: Sequence[int],
+        event_jump_to: Sequence[int],
+        go_to: Sequence[int],
+        elem_names: Sequence[Sequence[str]],
+        seqname: str,
+        chans: int,
+        subseq_positions: Sequence[int] = (),
+        flags: Sequence[Sequence[Sequence[int]]] | None = None,
+    ) -> str:
         """
         Make an xml file describing a sequence.
 

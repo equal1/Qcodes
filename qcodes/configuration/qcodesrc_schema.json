@@ -276,6 +276,12 @@
         "GUID_components":{
             "type": "object",
             "properties": {
+                "GUID_type": {
+                    "type": "string",
+                    "enum": ["explicit_sample", "random_sample"],
+                    "default": "random_sample",
+                    "description": "Type of GUID to use. Currently possible to chose between an explicitly assigned 'Sample identification code' and a random string as the first part of the GUID."
+                },
                 "location": {
                     "type": "integer",
                     "default": 0,
@@ -322,6 +328,11 @@
                     "default": false,
                     "description": "Should dond functions show a progress bar during the measurement"
                 },
+                "callback_percent": {
+                    "type": "number",
+                    "default": 5.0,
+                    "description": "If user wants to callback a function while loading data, the callback is done every callback_percent"
+                },
                 "export_automatic": {
                     "type": "boolean",
                     "default": false,
@@ -335,8 +346,8 @@
                 },
                 "export_path": {
                     "type": "string",
-                    "default": "~",
-                    "description": "Data export path for exporting datasets to disk after a measurement finishes. Only activated if export_type is set"
+                    "default": "{db_location}",
+                    "description": "Data export path for exporting datasets to disk after a measurement finishes. Only activated if export_type is set. {db_location} is a directory in the same folder as the .db file with a matching name i.e. for  ~\\experiments.db will netcdf files will be exported to ~\\experiments_db"
                 },
                 "export_prefix": {
                     "type": "string",

@@ -1,14 +1,18 @@
+from __future__ import annotations
+
 import gc
 import os
 import shutil
 import tempfile
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Generator, Iterator
 
 import numpy as np
 import pytest
+from pytest import FixtureRequest
 
 import qcodes as qc
+from qcodes.dataset.data_set import DataSet
 from qcodes.dataset.descriptions.dependencies import InterDependencies_
 from qcodes.dataset.descriptions.param_spec import ParamSpec, ParamSpecBase
 from qcodes.dataset.measurements import Measurement
@@ -26,7 +30,7 @@ from qcodes.validators import Arrays, ComplexNumbers, Numbers
 
 
 @pytest.fixture(scope="function", name="non_created_db")
-def _make_non_created_db(tmp_path):
+def _make_non_created_db(tmp_path) -> Generator[None, None, None]:
     # set db location to a non existing file
     try:
         qc.config["core"]["db_location"] = str(tmp_path / "temp.db")
@@ -113,10 +117,40 @@ def temporarily_copied_DB(filepath: str, **kwargs):
             conn.close()
 
 
-@pytest.fixture
-def scalar_dataset(dataset):
+@pytest.fixture(name="scalar_dataset")
+def _make_scalar_dataset(dataset):
     n_params = 3
     n_rows = 10**3
+    params_indep = [
+        ParamSpecBase(f"param_{i}", "numeric", label=f"param_{i}", unit="V")
+        for i in range(n_params)
+    ]
+    param_dep = ParamSpecBase(
+        f"param_{n_params}", "numeric", label=f"param_{n_params}", unit="Ohm"
+    )
+
+    all_params = params_indep + [param_dep]
+
+    idps = InterDependencies_(dependencies={param_dep: tuple(params_indep)})
+
+    dataset.set_interdependencies(idps)
+    dataset.mark_started()
+    dataset.add_results(
+        [
+            {p.name: int(n_rows * 10 * pn + i) for pn, p in enumerate(all_params)}
+            for i in range(n_rows)
+        ]
+    )
+    dataset.mark_completed()
+    yield dataset
+
+
+@pytest.fixture(
+    name="scalar_datasets_parameterized", params=((3, 10**3), (5, 10**3), (10, 50))
+)
+def _make_scalar_datasets_parameterized(dataset, request: FixtureRequest):
+    n_params = request.param[0]
+    n_rows = request.param[1]
     params_indep = [ParamSpecBase(f'param_{i}',
                                   'numeric',
                                   label=f'param_{i}',
@@ -163,7 +197,7 @@ def scalar_dataset_with_nulls(dataset):
 
 @pytest.fixture(scope="function",
                 params=["array", "numeric"])
-def array_dataset(experiment, request):
+def array_dataset(experiment, request: FixtureRequest):
     meas = Measurement()
     param = ArraySetPointParam()
     meas.register_parameter(param, paramtype=request.param)
@@ -173,12 +207,13 @@ def array_dataset(experiment, request):
     try:
         yield datasaver.dataset
     finally:
+        assert isinstance(datasaver.dataset, DataSet)
         datasaver.dataset.conn.close()
 
 
 @pytest.fixture(scope="function",
                 params=["array", "numeric"])
-def array_dataset_with_nulls(experiment, request):
+def array_dataset_with_nulls(experiment, request: FixtureRequest):
     """
     A dataset where two arrays are measured, one as a function
     of two other (setpoint) arrays, the other as a function of just one
@@ -205,12 +240,13 @@ def array_dataset_with_nulls(experiment, request):
     try:
         yield datasaver.dataset
     finally:
+        assert isinstance(datasaver.dataset, DataSet)
         datasaver.dataset.conn.close()
 
 
 @pytest.fixture(scope="function",
                 params=["array", "numeric"])
-def multi_dataset(experiment, request):
+def multi_dataset(experiment, request: FixtureRequest):
     meas = Measurement()
     param = Multi2DSetPointParam()
 
@@ -221,12 +257,13 @@ def multi_dataset(experiment, request):
     try:
         yield datasaver.dataset
     finally:
+        assert isinstance(datasaver.dataset, DataSet)
         datasaver.dataset.conn.close()
 
 
 @pytest.fixture(scope="function",
                 params=["array"])
-def different_setpoint_dataset(experiment, request):
+def different_setpoint_dataset(experiment, request: FixtureRequest):
     meas = Measurement()
     param = Multi2DSetPointParam2Sizes()
 
@@ -237,6 +274,7 @@ def different_setpoint_dataset(experiment, request):
     try:
         yield datasaver.dataset
     finally:
+        assert isinstance(datasaver.dataset, DataSet)
         datasaver.dataset.conn.close()
 
 
@@ -257,6 +295,7 @@ def array_in_scalar_dataset(experiment):
     try:
         yield datasaver.dataset
     finally:
+        assert isinstance(datasaver.dataset, DataSet)
         datasaver.dataset.conn.close()
 
 
@@ -278,6 +317,7 @@ def varlen_array_in_scalar_dataset(experiment):
     try:
         yield datasaver.dataset
     finally:
+        assert isinstance(datasaver.dataset, DataSet)
         datasaver.dataset.conn.close()
 
 
@@ -304,12 +344,13 @@ def array_in_scalar_dataset_unrolled(experiment):
     try:
         yield datasaver.dataset
     finally:
+        assert isinstance(datasaver.dataset, DataSet)
         datasaver.dataset.conn.close()
 
 
 @pytest.fixture(scope="function",
                 params=["array", "numeric"])
-def array_in_str_dataset(experiment, request):
+def array_in_str_dataset(experiment, request: FixtureRequest):
     meas = Measurement()
     scalar_param = Parameter('textparam', set_cmd=None)
     param = ArraySetPointParam()
@@ -325,6 +366,7 @@ def array_in_str_dataset(experiment, request):
     try:
         yield datasaver.dataset
     finally:
+        assert isinstance(datasaver.dataset, DataSet)
         datasaver.dataset.conn.close()
 
 
@@ -453,11 +495,13 @@ def complex_num_instrument():
     class MyParam(Parameter):
 
         def get_raw(self):
+            assert self.instrument is not None
             return self.instrument.setpoint() + 1j*self.instrument.setpoint()
 
     class RealPartParam(Parameter):
 
         def get_raw(self):
+            assert self.instrument is not None
             return self.instrument.complex_setpoint().real
 
     dummyinst = DummyInstrument('dummy_channel_inst', gates=())
@@ -658,6 +702,7 @@ class ArrayshapedParam(Parameter):
         super().__init__(*args, **kwargs)
 
     def get_raw(self):
+        assert isinstance(self.vals, Arrays)
         shape = self.vals.shape
 
         return np.random.rand(*shape)

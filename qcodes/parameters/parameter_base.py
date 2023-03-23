@@ -6,11 +6,11 @@ import time
 import warnings
 from collections.abc import Callable, Iterable, Mapping, Sequence, Sized
 from datetime import datetime
-from functools import wraps
+from functools import cached_property, wraps
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, overload
 
-from qcodes.metadatable import Metadatable
+from qcodes.metadatable import Metadatable, MetadatableWithName
 from qcodes.utils import DelegateAttributes, full_class, qcodes_abstractmethod
 from qcodes.validators import Enum, Ints, Validator
 
@@ -83,7 +83,7 @@ def invert_val_mapping(val_mapping: Mapping[Any, Any]) -> dict[Any, Any]:
     return {v: k for k, v in val_mapping.items()}
 
 
-class ParameterBase(Metadatable):
+class ParameterBase(MetadatableWithName):
     """
     Shared behavior for all parameters. Not intended to be used
     directly, normally you should use ``Parameter``, ``ArrayParameter``,
@@ -681,6 +681,22 @@ class ParameterBase(Metadatable):
             # drop the initial value, we're already there
             return permissive_range(start_value, value, step)[1:] + [value]
 
+    @cached_property
+    def _validate_context(self) -> str:
+        # return string describing the context for a validator
+        if self._instrument:
+            context = (
+                (
+                    getattr(self._instrument, "name", "")
+                    or str(self._instrument.__class__)
+                )
+                + "."
+                + self.name
+            )
+        else:
+            context = self.name
+        return "Parameter: " + context
+
     def validate(self, value: ParamDataType) -> None:
         """
         Validate the value supplied.
@@ -694,18 +710,7 @@ class ParameterBase(Metadatable):
                validator.
         """
         if self.vals is not None:
-            if self._instrument:
-                context = (
-                    (
-                        getattr(self._instrument, "name", "")
-                        or str(self._instrument.__class__)
-                    )
-                    + "."
-                    + self.name
-                )
-            else:
-                context = self.name
-            self.vals.validate(value, "Parameter: " + context)
+            self.vals.validate(value, self._validate_context)
 
     @property
     def step(self) -> float | None:

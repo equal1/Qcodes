@@ -31,7 +31,7 @@ def issue_deprecation_warning(
     what: str,
     reason: Optional[str] = None,
     alternative: Optional[str] = None,
-    stacklevel: int = 2,
+    stacklevel: int = 3,
 ) -> None:
     """
     Issue a `QCoDeSDeprecationWarning` with a consistently formatted message
@@ -72,7 +72,7 @@ def deprecate(
         if isinstance(obj, (types.FunctionType, types.MethodType)):
             func = cast(Callable[..., Any], obj)
             # pylint: disable=no-value-for-parameter
-            return decorate_callable(func)
+            return decorate_callable(func)  # pyright: ignore[reportGeneralTypeIssues]
             # pylint: enable=no-value-for-parameter
         else:
             # this would need to be recursive
@@ -83,10 +83,20 @@ def deprecate(
                     # by wrapt.
                     # if anyone reading this knows how the following line
                     # works please let me know.
-                    if isinstance(obj.__dict__.get(m_name, None), staticmethod):
+                    # wrapt cannot wrap class methods in 3.11.0
+                    # see https://github.com/python/cpython/issues/63272
+                    if isinstance(
+                        obj.__dict__.get(m_name, None), (staticmethod, classmethod)
+                    ):
                         continue
                     # pylint: disable=no-value-for-parameter
-                    setattr(obj, m_name, decorate_callable(m))
+                    setattr(
+                        obj,
+                        m_name,
+                        decorate_callable(
+                            m
+                        ),  # pyright: ignore[reportGeneralTypeIssues]
+                    )
                     # pylint: enable=no-value-for-parameter
             return obj
 

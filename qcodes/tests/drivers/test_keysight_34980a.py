@@ -2,18 +2,18 @@
 import logging
 
 import pytest
+from pytest import LogCaptureFixture
 
-import qcodes.instrument.sims as sims
 from qcodes.instrument_drivers.Keysight.keysight_34980a import Keysight34980A
-
-VISALIB = sims.__file__.replace('__init__.py', 'keysight_34980A.yaml@sim')
 
 
 @pytest.fixture(scope="module")
 def switch_driver():
-    inst = Keysight34980A('keysight_34980A_sim',
-                          address='GPIB::1::INSTR',
-                          visalib=VISALIB)
+    inst = Keysight34980A(
+        "keysight_34980A_sim",
+        address="GPIB::1::INSTR",
+        pyvisa_sim_file="keysight_34980A.yaml",
+    )
 
     try:
         yield inst
@@ -21,7 +21,7 @@ def switch_driver():
         inst.close()
 
 
-def test_safety_interlock_during_init(switch_driver, caplog):
+def test_safety_interlock_during_init(switch_driver, caplog: LogCaptureFixture) -> None:
     """
     to check if a warning would show when initialize the instrument with a
     module in safety interlock state. This test has to be placed first if
@@ -34,7 +34,7 @@ def test_safety_interlock_during_init(switch_driver, caplog):
     assert "safety interlock" in msg[0]
 
 
-def test_get_idn(switch_driver):
+def test_get_idn(switch_driver) -> None:
     """
     to check if the instrument attributes are set correctly after getting
     the IDN
@@ -47,7 +47,7 @@ def test_get_idn(switch_driver):
     }
 
 
-def test_scan_slots(switch_driver):
+def test_scan_slots(switch_driver) -> None:
     """
     to check if the submodule attributes are set correctly after scanning
     every slot
@@ -69,7 +69,7 @@ def test_scan_slots(switch_driver):
     }
 
 
-def test_safety_interlock(switch_driver, caplog):
+def test_safety_interlock(switch_driver, caplog: LogCaptureFixture) -> None:
     """
     to check if a warning would show when talk to a module that is in safety
     interlock state

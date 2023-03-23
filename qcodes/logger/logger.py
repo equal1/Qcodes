@@ -68,7 +68,7 @@ _opencensus_filter = logging.Filter(name="opencensus")
 _urllib3_connection_filter = logging.Filter(name="urllib3.connection")
 
 
-def filter_out_telemetry_log_records(record: logging.LogRecord) -> int:
+def filter_out_telemetry_log_records(record: logging.LogRecord) -> bool:
     """
     here we filter any message that is likely to be thrown from
     opencensus so it is not shown in the user console
@@ -319,7 +319,9 @@ def start_command_history_logger(log_dir: Optional[str] = None) -> None:
         log_dir: directory where log shall be stored to. If left out, defaults
             to ``~/.qcodes/logs/command_history.log``
     """
-    from IPython import get_ipython
+    # get_ipython is part of the public api but IPython does
+    # not use __all__ to mark this
+    from IPython import get_ipython  # type: ignore[attr-defined]
     ipython = get_ipython()
     if ipython is None:
         log.warning("Command history can't be saved"

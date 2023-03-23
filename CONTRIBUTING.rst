@@ -85,12 +85,14 @@ Setup
 Running Tests
 ~~~~~~~~~~~~~
 
-We don't want to reinvent the wheel, and thus use py.test.
+We don't want to reinvent the wheel, and thus use `pytest <https://docs.pytest.org/>`_.
 It's easy to install:
 
 ::
 
-    pip install -r test_requirements.txt
+    pip install .[test] -c requirements.txt
+
+(for editable install feel free to add `-e` flag to this call).
 
 Then to test and view the coverage:
 
@@ -278,12 +280,14 @@ Pull requests
 -  Document your changes so everyone can see that they are part of the next release:
    We are using `TownCrier <https://pypi.org/project/towncrier/>`__ to automatically
    generate a changelog from a set of individual files with one file per pull request.
-   Please create a file in the format ``number.categoryofcontribution`` in ``docs\changes\newsfragments``.
-   Here the number should either be the number of the pull request. To get the number of the pull request one must
-   first the pull request and then subsequently update the number. The category of contribution should be
-   one of ``breaking``, ``new``, ``improved``, ``new_driver`` ``improved_driver``, ``underthehood``.
-   The file should contain a small description of what is changed. If you have contributed documentation or an example
-   the file can also contain a link to this.
+   Please create a file with a name in the format ``number.categoryofcontribution`` in
+   ``docs\changes\newsfragments``. Here the number should be the number of the pull request.
+   To get the number of the pull request one must first open the pull request and then
+   subsequently take the number that GitHub assigned to the opened pull request.
+   The category of contribution should be one of ``breaking``, ``new``, ``improved``,
+   ``new_driver`` ``improved_driver``, ``underthehood``.
+   The file should contain a small description of what has changed.
+   If you have contributed documentation or an example the file can also contain a link to this.
 
 Automatic Testing (CI)
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -306,9 +310,9 @@ Our required checks consists of a number of jobs that performs the following act
 on Linux and on Windows.
 
 - Run our test suite using pytest as described above.
-- Perform type checking of the code in QCoDeS using MyPy. For many of the modules we enforce that the code must be
+- Perform type checking of the code in QCoDeS using MyPy and Pyright. For many of the modules we enforce that the code must be
   type annotated. We encourage all contributors to type annotate any contribution to QCoDeS. If you need help with this
-  please feel free to reach out.
+  please feel free to reach out. Pyright typechecks can be performed inline within VC-code using the Pylance extension.
 - Build the documentation using Sphinx with Sphinx warnings as errors. This includes execution of all example notebooks
   that are not explicitly marked as not to be executed. Please see here_ for information on how to disable execution of a
   notebook.
@@ -323,6 +327,7 @@ on Linux and on Windows.
     - Run `Darker <https://github.com/akaihola/darker/>`_. This will enforce `Black <https://github.com/psf/black>`_
       formatting and sorting of imports using `isort <https://pycqa.github.io/isort/>`_ on all new and changed code.
       We do not format the entire codebase to not lose change history.
+    - Run `ruff <https://github.com/charliermarsh/ruff>`_ to check for comon style issues in python code.
 
 
 Furthermore we also run our test suite with the minimum requirements stated to ensure that QCoDeS does work
